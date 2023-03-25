@@ -10,12 +10,12 @@ import sqlite3
 stop_scraping = False
 
 
-def save_to_csv(tweet_data):
+def save_to_csv(tweet_data, reason_topic):
     with open('troll_tweets.csv', mode='w', newline='', encoding='utf-8') as csv_file:
         writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
 
         # Write header
-        header = ['Username', 'Tweet URL', 'Reason Type', 'Reason Word']
+        header = ['Username', 'Tweet URL', 'Reason Type', 'Reason Word', 'Reason Topic']
         writer.writerow(header)
 
         # Write the rows
@@ -24,7 +24,8 @@ def save_to_csv(tweet_data):
                 tweet['Username'],
                 ' ' + tweet['Tweet URL'],
                 ' ' + tweet['Reason Type'],
-                ' ' + tweet['Reason Word']
+                ' ' + tweet['Reason Word'],
+                ' ' + reason_topic
             ]
             writer.writerow(row)
 
@@ -39,27 +40,31 @@ def setup_database():
             username TEXT NOT NULL,
             tweet_url TEXT NOT NULL,
             reason_type TEXT NOT NULL,
-            reason_word TEXT NOT NULL
+            reason_word TEXT NOT NULL,
+            reason_topic TEXT NOT NULL
         )
     """)
 
     conn.commit()
     conn.close()
 
+
 setup_database()
 
-def save_to_database(tweet_data):
+
+def save_to_database(tweet_data, reason_topic):
     conn = sqlite3.connect("troll_tweets.db")
     cursor = conn.cursor()
 
     for tweet in tweet_data:
         cursor.execute("""
-            INSERT INTO troll_tweets (username, tweet_url, reason_type, reason_word)
-            VALUES (?, ?, ?, ?)
-        """, (tweet['Username'], tweet['Tweet URL'], tweet['Reason Type'], tweet['Reason Word']))
+            INSERT INTO troll_tweets (username, tweet_url, reason_type, reason_word, reason_topic)
+            VALUES (?, ?, ?, ?, ?)
+        """, (tweet['Username'], tweet['Tweet URL'], tweet['Reason Type'], tweet['Reason Word'], reason_topic))
 
     conn.commit()
     conn.close()
+
 
 def stop_scraping_process():
     global stop_scraping
@@ -110,6 +115,7 @@ def fetch_tweets(max_tweets):
         # Display the troll tweet in the text box
         username = tweet.user.username
         reason = get_troll_reason(tweet.rawContent)
+        reason_topic = get_troll_topic()
 
         tweet_textbox.insert(tk.END, f"{username} - ")
         tweet_textbox.insert(tk.END, reason['reason_word'], ('link', get_tweet_thread(tweet)))
@@ -118,6 +124,16 @@ def fetch_tweets(max_tweets):
         tweet_textbox.tag_config('link', foreground='blue', underline=True)
         tweet_textbox.tag_bind('link', '<Button-1>', lambda e: webbrowser.open_new(tweet_textbox.tag_names(tk.constants.CURRENT)[1]))
 
+        tweet_data = {
+            'Username': tweet.user.username,
+            'Tweet URL': get_tweet_thread(tweet),
+            'Reason Type': reason['reason_type'],
+            'Reason Word': reason['reason_word']
+        }
+        # Save the troll tweets to the database
+        save_to_database([tweet_data], reason_topic)
+        # Save the troll tweets to a CSV file
+        save_to_csv([tweet_data], reason_topic)
 
     def scrape_tweets():
         i = 0
@@ -144,8 +160,7 @@ def fetch_tweets(max_tweets):
                     'Reason Type': get_troll_reason(tweet.rawContent)['reason_type'],
                     'Reason Word': get_troll_reason(tweet.rawContent)['reason_word']
                 })
-                 # Save the troll tweets to the database
-                save_to_database(troll_tweets)
+
                 # Display the troll tweet in the text box as it is fetched
                 display_tweets(tweet)
 
@@ -157,8 +172,11 @@ def fetch_tweets(max_tweets):
         status_label.config(text=f"Fetched {troll_tweet_count} troll tweets out of {i+1} tweets")
         window.update_idletasks()
 
+        # Save the troll tweets to the database
+        save_to_database(troll_tweets, get_troll_topic())
+
         # Save the troll tweets to a CSV file
-        save_to_csv(troll_tweets)        
+        save_to_csv(troll_tweets, get_troll_topic())
 
     def get_tweet_thread(tweet):
         if tweet.conversationId is None:
@@ -188,6 +206,19 @@ def fetch_tweets(max_tweets):
                 break
 
         return reason
+
+    def get_troll_topic():
+        lower_hashtag = hashtag_entry.get().lower().strip()
+        if lower_hashtag in PRO_TOPICS:
+            return 'pro_topic'
+        elif lower_hashtag in CONTRA_TOPICS:
+            return 'contra_topic'
+        elif any(account.lower() in lower_hashtag for account in PRO_ACCOUNTS):
+            return 'pro_account'
+        elif any(account.lower() in lower_hashtag for account in CONTRA_ACCOUNTS):
+            return 'contra_account'
+        else:
+            return 'unknown'
 
     # Start the scraping process in a new thread
     global stop_scraping
@@ -239,7 +270,7 @@ def load_tweets_from_database():
     tweets = cursor.fetchall()
 
     for tweet in tweets:
-        username, tweet_url, reason_type, reason_word = tweet[1], tweet[2], tweet[3], tweet[4]
+        username, tweet_url, reason_type, reason_word, reason_topic = tweet[1], tweet[2], tweet[3], tweet[4], tweet[5]
 
         tweet_textbox.insert(tk.END, f"{username} - ")
         tweet_textbox.insert(tk.END, reason_word, ('link', tweet_url))
