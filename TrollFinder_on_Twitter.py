@@ -9,27 +9,30 @@ import sqlite3
 
 stop_scraping = False
 
-
 def save_to_csv(tweet_data, reason_topic):
     with open('troll_tweets.csv', mode='w', newline='', encoding='utf-8') as csv_file:
         writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
 
         # Write header
-        header = ['Username', 'Tweet URL', 'Tweet Date', 'Reason Type', 'Reason Word', 'Reason Topic']
+        header = ['Tweet ID', 'Username', 'Tweet URL', 'Tweet Date', 'Reason Type', 'Reason Word', 'Reason Topic']
         writer.writerow(header)
 
         # Write the rows
+        written_tweet_ids = set()
         for tweet in tweet_data:
-            row = [
-                tweet['Username'],
-                ' ' + tweet['Tweet URL'],
-                ' ' + tweet['Tweet Date'],
-                ' ' + tweet['Reason Type'],
-                ' ' + tweet['Reason Word'],
-                ' ' + reason_topic
-            ]
-            writer.writerow(row)
-
+            tweet_id = tweet['Tweet ID']
+            if tweet_id not in written_tweet_ids:
+                row = [
+                    tweet_id,
+                    tweet['Username'],
+                    ' ' + tweet['Tweet URL'],
+                    ' ' + tweet['Tweet Date'],
+                    ' ' + tweet['Reason Type'],
+                    ' ' + tweet['Reason Word'],
+                    ' ' + reason_topic
+                ]
+                writer.writerow(row)
+                written_tweet_ids.add(tweet_id)
 
 def setup_database():
     conn = sqlite3.connect("troll_tweets.db")
@@ -38,6 +41,7 @@ def setup_database():
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS troll_tweets (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tweet_id INTEGER UNIQUE,
             username TEXT NOT NULL,
             tweet_url TEXT NOT NULL,
             tweet_date TEXT NOT NULL,
@@ -50,30 +54,28 @@ def setup_database():
     conn.commit()
     conn.close()
 
-
-
 setup_database()
-
 
 def save_to_database(tweet_data, reason_topic):
     conn = sqlite3.connect("troll_tweets.db")
     cursor = conn.cursor()
 
     for tweet in tweet_data:
-        cursor.execute("""
-            INSERT INTO troll_tweets (username, tweet_url, tweet_date, reason_type, reason_word, reason_topic)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (tweet['Username'], tweet['Tweet URL'], tweet['Tweet Date'], tweet['Reason Type'], tweet['Reason Word'], reason_topic))
+        try:
+            cursor.execute("""
+                INSERT INTO troll_tweets (tweet_id, username, tweet_url, tweet_date, reason_type, reason_word, reason_topic)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (tweet['Tweet ID'], tweet['Username'], tweet['Tweet URL'], tweet['Tweet Date'], tweet['Reason Type'], tweet['Reason Word'], reason_topic))
+            conn.commit()
+        except sqlite3.IntegrityError:
+            # Ignore duplicate tweet_id
+            pass
 
-    conn.commit()
     conn.close()
-
-
 
 def stop_scraping_process():
     global stop_scraping
     stop_scraping = True
-
 
 def is_trolling(tweet_text):
     lower_tweet_text = tweet_text.lower()
@@ -103,7 +105,6 @@ def is_trolling(tweet_text):
 
     return False
 
-
 def fetch_tweets(max_tweets):
     hashtag = hashtag_entry.get().strip()
     if not hashtag:
@@ -121,6 +122,7 @@ def fetch_tweets(max_tweets):
         reason = get_troll_reason(tweet.rawContent)
         reason_topic = get_troll_topic()
         tweet_date = tweet.date.strftime("%Y-%m-%d %H:%M:%S")
+        tweet_id = tweet.id 
 
         tweet_textbox.insert(tk.END, f"{username} - ")
         tweet_textbox.insert(tk.END, reason['reason_word'], ('link', get_tweet_thread(tweet)))
@@ -131,6 +133,7 @@ def fetch_tweets(max_tweets):
         tweet_textbox.tag_bind('link', '<Button-1>', lambda e: webbrowser.open_new(tweet_textbox.tag_names(tk.constants.CURRENT)[1]))
 
         tweet_data = {
+            'Tweet ID': tweet_id,
             'Username': tweet.user.username,
             'Tweet URL': get_tweet_thread(tweet),
             'Tweet Date': tweet_date,
@@ -163,7 +166,9 @@ def fetch_tweets(max_tweets):
                 troll_tweet_count += 1
 
                 # Store the troll tweet data
+                tweet_id = tweet.id
                 troll_tweets.append({
+                    'Tweet ID': tweet_id,
                     'Username': tweet.user.username,
                     'Tweet URL': get_tweet_thread(tweet),
                     'Tweet Date': tweet_date,
@@ -187,7 +192,7 @@ def fetch_tweets(max_tweets):
 
         # Save the troll tweets to a CSV file
         save_to_csv(troll_tweets, get_troll_topic())
-
+    
     def get_tweet_thread(tweet):
         if tweet.conversationId is None:
             return f"https://twitter.com/{tweet.user.username}/status/{tweet.id}"
@@ -292,10 +297,10 @@ def load_tweets_from_database():
 
     conn.close()
 
-
 # Add this line right before starting the GUI loop
 load_tweets_from_database()
 
 # Start the GUI loop
 window.mainloop()
+
 
