@@ -56,6 +56,32 @@ def setup_database():
 
 setup_database()
 
+def save_all_tweets():
+    conn = sqlite3.connect("troll_tweets.db")
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT * FROM troll_tweets")
+    tweets = cursor.fetchall()
+
+    reason_topic = get_troll_topic()
+    tweet_data_list = []
+
+    for tweet in tweets:
+        tweet_data = {
+            'Tweet ID': tweet[1],
+            'Username': tweet[2],
+            'Tweet URL': tweet[3],
+            'Tweet Date': tweet[4],
+            'Reason Type': tweet[5],
+            'Reason Word': tweet[6]
+        }
+        save_to_database([tweet_data], reason_topic)
+        tweet_data_list.append(tweet_data)
+
+    save_to_csv(tweet_data_list, reason_topic)
+
+    conn.close()
+    
 def save_to_database(tweet_data, reason_topic):
     conn = sqlite3.connect("troll_tweets.db")
     cursor = conn.cursor()
@@ -104,6 +130,22 @@ def is_trolling(tweet_text):
         return True
 
     return False
+
+def get_troll_topic():
+    hashtag = hashtag_entry.get().lower().strip()
+    if not hashtag:
+        hashtag = "chemtrails"  # Set default hashtag to chemtrails if no hashtag is entered
+        
+    if hashtag in [topic.lower() for topic in PRO_TOPICS]:
+        return 'pro_topic'
+    elif hashtag in [topic.lower() for topic in CONTRA_TOPICS]:
+        return 'contra_topic'
+    elif any(account.lower() in hashtag for account in PRO_ACCOUNTS):
+        return 'pro_account'
+    elif any(account.lower() in hashtag for account in CONTRA_ACCOUNTS):
+        return 'contra_account'
+    else:
+        return hashtag
 
 def fetch_tweets(max_tweets):
     hashtag = hashtag_entry.get().strip()
@@ -222,22 +264,6 @@ def fetch_tweets(max_tweets):
 
         return reason
 
-    def get_troll_topic():
-        hashtag = hashtag_entry.get().lower().strip()
-        if not hashtag:
-            hashtag = "chemtrails"  # Set default hashtag to chemtrails if no hashtag is entered
-        
-        if hashtag in [topic.lower() for topic in PRO_TOPICS]:
-            return 'pro_topic'
-        elif hashtag in [topic.lower() for topic in CONTRA_TOPICS]:
-            return 'contra_topic'
-        elif any(account.lower() in hashtag for account in PRO_ACCOUNTS):
-            return 'pro_account'
-        elif any(account.lower() in hashtag for account in CONTRA_ACCOUNTS):
-            return 'contra_account'
-        else:
-            return hashtag
-
     # Start the scraping process in a new thread
     global stop_scraping
     stop_scraping = False
@@ -271,11 +297,15 @@ tweet_textbox = tk.Text(window, width=60, height=30)
 tweet_textbox.grid(row=3, column=0, columnspan=2, padx=5, pady=5)
 
 # Create the "Clear" and "Start Scraping" button to clear the text box
-start_scraping_button = tk.Button(window, text="Start Scraping", command=lambda: fetch_tweets(100))
+start_scraping_button = tk.Button(window, text="Start Scraping", command=lambda: fetch_tweets(None))
 start_scraping_button.grid(row=2, column=0, padx=5, pady=5)
 
 clear_button = tk.Button(window, text="Clear", command=lambda: tweet_textbox.delete(1.0, tk.END))
 clear_button.grid(row=2, column=1, padx=5, pady=5)
+
+# Create the Save button
+save_button = tk.Button(window, text="Save All Tweets", command=save_all_tweets)
+save_button.grid(row=6, column=2, padx=5, pady=5, sticky="w")
 
 stop_button = tk.Button(window, text="Stop", command=stop_scraping_process)
 stop_button.grid(row=2, column=2, padx=5, pady=5)
@@ -288,12 +318,11 @@ def load_tweets_from_database():
     tweets = cursor.fetchall()
 
     for tweet in tweets:
-        username, tweet_url, tweet_date, reason_type, reason_word, reason_topic = tweet[1], tweet[2], tweet[3], tweet[4], tweet[5], tweet[6]
+        tweet_id, username, tweet_url, tweet_date, reason_type, reason_word, reason_topic = tweet[1], tweet[2], tweet[3], tweet[4], tweet[5], tweet[6], tweet[7]
 
         tweet_textbox.insert(tk.END, f"{username} - ")
         tweet_textbox.insert(tk.END, reason_word, ('link', tweet_url))
         tweet_textbox.insert(tk.END, f" ({reason_type})\n")
-        tweet_textbox.insert(tk.END, f"Date: {tweet_date}\n\n")
 
     conn.close()
 
@@ -302,5 +331,6 @@ load_tweets_from_database()
 
 # Start the GUI loop
 window.mainloop()
+
 
 
