@@ -158,26 +158,37 @@ def fetch_tweets(max_tweets):
         num_tweets = int(num_tweets)  # Convert the string value to an integer
 
     # Define a function to scrape tweets and check for trolling
-    def display_tweets(tweet):
-        # Display the troll tweet in the text box
+    def display_tweets(tweet, is_pro_topic=False):
+        # Display the troll tweet or 'Pro topic detected' tweet in the text box
         username = tweet.user.username
         reason = get_troll_reason(tweet.rawContent)
         reason_topic = get_troll_topic()
         tweet_date = tweet.date.strftime("%Y-%m-%d %H:%M:%S")
         tweet_id = tweet.id 
 
-        tweet_textbox.insert(tk.END, f"{username} - ")
-        tweet_textbox.insert(tk.END, reason['reason_word'], ('link', get_tweet_thread(tweet)))
-        tweet_textbox.insert(tk.END, f" ({reason['reason_type']})\n")
-        #tweet_textbox.insert(tk.END, f"Date: {tweet_date}\n\n")
+        tweet_url = get_tweet_thread(tweet)
 
-        tweet_textbox.tag_config('link', foreground='blue', underline=True)
+        if is_pro_topic:
+            tweet_textbox.insert(tk.END, f"{username} - ")
+            tweet_textbox.insert(tk.END, reason['reason_type'], ('link_pro_topic', tweet_url))
+            tweet_textbox.tag_config('link_pro_topic', foreground='green', underline=True)
+        else:
+            tweet_textbox.insert(tk.END, f"{username} - ")
+            tweet_textbox.insert(tk.END, reason['reason_word'], ('link', tweet_url))
+            tweet_textbox.tag_config('link', foreground='red', underline=True)
+
+        if reason['reason_type'] != 'Pro topic detected':
+            tweet_textbox.insert(tk.END, f" ({reason['reason_type']})\n")
+        else:
+            tweet_textbox.insert(tk.END, "\n")
+
         tweet_textbox.tag_bind('link', '<Button-1>', lambda e: webbrowser.open_new(tweet_textbox.tag_names(tk.constants.CURRENT)[1]))
+        tweet_textbox.tag_bind('link_pro_topic', '<Button-1>', lambda e: webbrowser.open_new(tweet_url))
 
         tweet_data = {
             'Tweet ID': tweet_id,
             'Username': tweet.user.username,
-            'Tweet URL': get_tweet_thread(tweet),
+            'Tweet URL': tweet_url,
             'Tweet Date': tweet_date,
             'Reason Type': reason['reason_type'],
             'Reason Word': reason['reason_word']
@@ -186,6 +197,8 @@ def fetch_tweets(max_tweets):
         save_to_database([tweet_data], reason_topic)
         # Save the troll tweets to a CSV file
         save_to_csv([tweet_data], reason_topic)
+
+
 
     def scrape_tweets():
         i = 0
@@ -207,6 +220,9 @@ def fetch_tweets(max_tweets):
             if is_trolling(tweet.rawContent):
                 troll_tweet_count += 1
 
+                # Display the troll tweet in the text box as it is fetched
+                display_tweets(tweet)
+
                 # Store the troll tweet data
                 tweet_id = tweet.id
                 troll_tweets.append({
@@ -217,9 +233,10 @@ def fetch_tweets(max_tweets):
                     'Reason Type': get_troll_reason(tweet.rawContent)['reason_type'],
                     'Reason Word': get_troll_reason(tweet.rawContent)['reason_word']
                 })
-
-                # Display the troll tweet in the text box as it is fetched
-                display_tweets(tweet)
+            else:
+                reason = get_troll_reason(tweet.rawContent)
+                if reason['reason_type'] == 'Pro topic detected':
+                    display_tweets(tweet, is_pro_topic=True)
 
             # Update the status label with the number of fetched tweets
             status_label.config(text=f"Fetched {i+1} tweets")
