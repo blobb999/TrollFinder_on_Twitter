@@ -1,5 +1,5 @@
 # SENTINEL_WORDS are terms that are often used by paid agent provocateurs to intentionally offend a particular CONTRA_TOPICS or user.
-SENTINEL_WORDS = {'schwurbler': 1, 'verschwörungstheoretiker': 1, 'vtler': 1, 'dunning-kruger': 1, 'flacherdler': 1, 'covidiot': 1, 'aluhut': 1, 'schwachsinn': 1, 'leerdenker': 1, 'querdenker': 1, 'paulanergarten': 1, 'impfgegner': 1}
+SENTINEL_WORDS = {'schwurbler': 1, 'verschwörungstheoretiker': 1, 'vtler': 1, 'dunning': 1, 'kruger': 1, 'flacherdler': 1, 'covidiot': 1, 'aluhut': 1, 'schwachsinn': 1, 'leerdenker': 1, 'querdenker': 1, 'paulanergarten': 1, 'impfgegner': 1}
 
 # AGGRESSIVENESS_WORDS are terms that distract from a fair discussion, poison the atmosphere, and lead to nowhere, which is the intended goal.
 AGGRESSIVENESS_WORDS = {'oberpfeife': 1, 'dummheit': 1, 'flasche': 1, 'vollpfosten': 1, 'idioten': 1, 'spinner': 1, 'rechtsextreme': 1, 'antisemit': 1, 'leugner': 1, 'rechter': 1}
